@@ -4,53 +4,59 @@ namespace App\Http\Controllers;
 
 use App\Models\Student;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\Rule;
 
 class StudentController extends Controller
 {
     public function index()
     {
         return [
-            'data' => Student::get(),
+            'data' => Student::with('major')->get(),
         ];
     }
 
     public function store(Request $request)
     {
-        $validated = Validator::make($request->all(), [
-            'student_number' => ['required', 'min:4', 'unique:students'],
-            'email' => ['required', 'email'],
-            'name' => ['required'],
-        ]);
+        try {
+            DB::beginTransaction();
+            $validated = Validator::make($request->all(), [
+                'student_number' => ['required', 'min:4', 'unique:students'],
+                'email' => ['required', 'email'],
+                'name' => ['required'],
+                'major_id' => ['required', Rule::exists('majors', 'id')],
+            ]);
 
-        if ($validated->fails()) {
-            return response()->json($validated->errors(), 422);
+            if ($validated->fails()) {
+                return response()->json($validated->errors(), 422);
+            }
+
+            $student = Student::create([
+                'student_number' => $request->student_number,
+                'email' => $request->email,
+                'name' => $request->name,
+                'major_id' => $request->major_id,
+            ]);
+
+            DB::commit();
+            return [
+                'data' => $student,
+                'message' => 'Mahasiswa berhasil didaftarkan.'
+            ];
+        } catch (\Exception $error) {
+            DB::rollBack();
+
+            return response()->json([
+                'message' => 'Oops.. gagal menambahkan Mahasiswa',
+            ], 500);
         }
-
-        $student = Student::create([
-            'student_number' => $request->student_number,
-            'email' => $request->email,
-            'name' => $request->name,
-        ]);
-
-        $student = Student::create([
-            'student_number' => $request->student_number,
-            'email' => $request->email,
-            'name' => $request->name,
-        ]);
-
-        return [
-            'data' => $student,
-            'message' => 'Mahasiswa berhasil didaftarkan.'
-        ];
     }
 
     public function show($id)
     {
-        // otomatis search by kolom id, dan hanya ambil data pertama
-        $student = Student::find($id);
-
-        $student = Student::where('id', $id)->first();
+        $student = Student::with('major')->where('id', $id)->first();
 
         return [
             'data' => $student
@@ -62,6 +68,7 @@ class StudentController extends Controller
         $validated = Validator::make($request->all(), [
             'email' => ['required', 'email'],
             'name' => ['required'],
+            'major_id' => ['required', Rule::exists('majors', 'id')],
         ]);
 
         if ($validated->fails()) {
@@ -79,7 +86,8 @@ class StudentController extends Controller
         // Menggunakan ->only agar spesifik field apa saja yang diinput
         $student = $student->update($request->only([
             'name',
-            'email'
+            'email',
+            'major_id'
         ]));
 
         return [
