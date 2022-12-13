@@ -10,7 +10,9 @@ class StudentController extends Controller
 {
     public function index()
     {
-        return Student::get();
+        return [
+            'data' => Student::get(),
+        ];
     }
 
     public function store(Request $request)
